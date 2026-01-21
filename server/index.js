@@ -31,6 +31,16 @@ io.on('connection', (socket) => {
   socket.on("answer_call", (payload) => {
     io.to(payload.to).emit("call_accepted", payload.signal);
   });
+
+  socket.on('disconnecting', () => {
+      socket.rooms.forEach(room => {
+          socket.to(room).emit("user_disconnected", socket.id);
+      });
+  });
+
+  socket.on('disconnect', () => {
+      console.log('User Disconnected:', socket.id);
+  });
 });
 
 server.listen(3001, () => console.log("SERVER RUNNING ON 3001"));
