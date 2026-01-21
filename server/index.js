@@ -5,30 +5,32 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] }
 });
 
 io.on('connection', (socket) => {
-  console.log(`User Connected: ${socket.id}`);
-
-  socket.on('join_room', (roomId) => {
-    socket.join(roomId);
-    console.log(`User with ID: ${socket.id} joined room: ${roomId}`);
-    socket.to(roomId).emit('user_joined', socket.id);
+  
+  socket.on("join_room", (roomID) => {
+    socket.join(roomID);
+    // Tell everyone else in the room: "Hey, I'm here (socket.id)"
+    socket.to(roomID).emit("user_joined", socket.id);
   });
 
-  socket.on('disconnect', () => {
-    console.log('User Disconnected', socket.id);
+  // Handshake Step 1: User A sends "Offer" to User B
+  socket.on("call_user", (payload) => {
+    io.to(payload.userToCall).emit("receiving_call", { 
+      signal: payload.signalData, 
+      from: payload.from 
+    });
+  });
+
+  // Handshake Step 2: User B sends "Answer" back to User A
+  socket.on("answer_call", (payload) => {
+    io.to(payload.to).emit("call_accepted", payload.signal);
   });
 });
 
-server.listen(3001, () => {
-  console.log("SERVER RUNNING ON PORT 3001");
-});
+server.listen(3001, () => console.log("SERVER RUNNING ON 3001"));
