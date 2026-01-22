@@ -14,8 +14,9 @@ export const useGhostStream = () => {
 
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<PeerInstance | null>(null);
-  const receivingFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[] } | null>(null);
+  const receivingFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string } | null>(null);
   const lastSpeedRef = useRef<{ bytes: number; time: number }>({ bytes: 0, time: 0 });
+  const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[], id: string } | null>(null);
 
   const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 9)]);
 
@@ -42,14 +43,20 @@ export const useGhostStream = () => {
     };
   }, []);
 
-  // --- HELPER FUNCTIONS ---
-  const resetConnection = () => {
-    if (peerRef.current) peerRef.current.destroy();
-    setStatus("idle");
-    setTransferSpeed('');
-    setProgress(0);
-    receivingFile.current = null;
-  };
+const resetConnection = () => {
+  if (peerRef.current) peerRef.current.destroy();
+  
+  if (receivingFile.current) {
+      addLog(`⚠️ Connection lost! Saving progress at ${Math.round((receivingFile.current.received / receivingFile.current.size) * 100)}%`);
+      suspendedFile.current = { ...receivingFile.current, id: `${receivingFile.current.name}-${receivingFile.current.size}` };
+      receivingFile.current = null; 
+  } else {
+      setProgress(0);
+  }
+
+  setStatus("idle");
+  setTransferSpeed('');
+};
 
   const handlePeerEvents = (peer: PeerInstance) => {
     peer.on("connect", () => { setStatus("connected"); addLog("🚀 P2P Tunnel Established"); });
@@ -82,60 +89,99 @@ export const useGhostStream = () => {
     }
   };
 
-  const sendFile = (file: File) => {
-    if (!peerRef.current) return;
-    addLog(`📤 Sending: ${file.name}`);
-    lastSpeedRef.current = { bytes: 0, time: Date.now() };
+const pendingFile = useRef<File | null>(null);
 
-    peerRef.current.send(JSON.stringify({ type: 'header', name: file.name, size: file.size }));
-    
-    const chunkSize = 64 * 1024;
-    let offset = 0;
+const sendFile = (file: File) => {
+  if (!peerRef.current) return;
+  
+  pendingFile.current = file;
+  addLog(`📤 Proposing: ${file.name}`);
+  
+  peerRef.current.send(JSON.stringify({ type: 'header', name: file.name, size: file.size }));
+};
 
-    const readSlice = (o: number) => {
-      const slice = file.slice(o, o + chunkSize);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (!event.target?.result || !peerRef.current) return;
-        const chunk = new Uint8Array(event.target.result as ArrayBuffer);
-        const canSendMore = peerRef.current.write(chunk);
-        
-        offset += chunk.byteLength;
-        setProgress(Math.round((offset / file.size) * 100));
-        
-        // Speed Calc
-        const now = Date.now();
-        const timeDiff = (now - lastSpeedRef.current.time) / 1000;
-        if (timeDiff > 0.5) {
-            const speed = ((offset - lastSpeedRef.current.bytes) / 1024 / 1024) / timeDiff;
-            setTransferSpeed(`${speed.toFixed(2)} MB/s`);
-            lastSpeedRef.current = { bytes: offset, time: now };
-        }
+const startStreamingFile = (startingOffset: number) => {
+  const file = pendingFile.current;
+  if (!file || !peerRef.current) return;
 
-        if (offset < file.size) {
-          canSendMore ? readSlice(offset) : peerRef.current.once('drain', () => readSlice(offset));
-        } else {
-          addLog("✅ File Sent!");
-          setTransferSpeed('Done');
-          setProgress(0);
-        }
-      };
-      reader.readAsArrayBuffer(slice);
+  if (startingOffset > 0) {
+      addLog(`⏩ Resuming transfer from ${(startingOffset / 1024 / 1024).toFixed(2)} MB`);
+  } else {
+      addLog(`🚀 Starting transfer...`);
+  }
+
+  lastSpeedRef.current = { bytes: startingOffset, time: Date.now() };
+  
+  const chunkSize = 64 * 1024;
+  let offset = startingOffset;
+
+  const readSlice = (o: number) => {
+    const slice = file.slice(o, o + chunkSize);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (!event.target?.result || !peerRef.current) return;
+      const chunk = new Uint8Array(event.target.result as ArrayBuffer);
+      const canSendMore = peerRef.current.write(chunk);
+      
+      offset += chunk.byteLength;
+      setProgress(Math.round((offset / file.size) * 100));
+      
+      const now = Date.now();
+      const timeDiff = (now - lastSpeedRef.current.time) / 1000;
+      if (timeDiff > 0.5) {
+          const speed = ((offset - lastSpeedRef.current.bytes) / 1024 / 1024) / timeDiff;
+          setTransferSpeed(`${speed.toFixed(2)} MB/s`);
+          lastSpeedRef.current = { bytes: offset, time: now };
+      }
+
+      if (offset < file.size) {
+        canSendMore ? readSlice(offset) : peerRef.current.once('drain', () => readSlice(offset));
+      } else {
+        addLog("✅ File Sent!");
+        setTransferSpeed('Done');
+        setProgress(0);
+        pendingFile.current = null;
+      }
     };
-    readSlice(0);
+    reader.readAsArrayBuffer(slice);
   };
+  readSlice(startingOffset);
+};
 
-  const handleReceiveData = (data: any) => {
-    if (data.toString().includes('"type":"header"')) {
-      try {
-        const header = JSON.parse(data.toString());
-        receivingFile.current = { name: header.name, size: header.size, received: 0, chunks: [] };
-        addLog(`📥 Incoming: ${header.name}`);
-        lastSpeedRef.current = { bytes: 0, time: Date.now() };
-        return;
-      } catch (e) {}
-    }
-    if (receivingFile.current) {
+const handleReceiveData = (data: any) => {
+  const strData = data.toString();
+
+  if (strData.includes('"type":"header"')) {
+    try {
+      const header = JSON.parse(strData);
+      const fileId = `${header.name}-${header.size}`;
+      
+      let resumeOffset = 0;
+
+      if (suspendedFile.current && suspendedFile.current.id === fileId) {
+          addLog(`🔄 Found incomplete transfer! Resuming from ${Math.round((suspendedFile.current.received / suspendedFile.current.size) * 100)}%`);
+          resumeOffset = suspendedFile.current.received;
+          receivingFile.current = suspendedFile.current;
+          suspendedFile.current = null;
+      } else {
+          addLog(`📥 Incoming: ${header.name}`);
+          receivingFile.current = { name: header.name, size: header.size, received: 0, chunks: [], id: fileId };
+      }
+
+      peerRef.current?.send(JSON.stringify({ type: 'resume_ack', offset: resumeOffset }));
+      
+      lastSpeedRef.current = { bytes: resumeOffset, time: Date.now() };
+      return;
+    } catch (e) { console.error(e); }
+  }
+
+  if (strData.includes('"type":"resume_ack"')) {
+      const ack = JSON.parse(strData);
+      startStreamingFile(ack.offset); 
+      return;
+  }
+
+  if (receivingFile.current) {
       const file = receivingFile.current;
       file.chunks.push(data);
       file.received += data.byteLength;
@@ -148,12 +194,13 @@ export const useGhostStream = () => {
         a.href = url; a.download = file.name; a.click();
         
         receivingFile.current = null;
+        suspendedFile.current = null;
         setProgress(0);
         setTransferSpeed('Complete');
         addLog("💾 Downloaded!");
       }
-    }
-  };
+  }
+};
 
   return {
     roomId, setRoomId, joinRoom, status, logs, progress, transferSpeed, sendFile
