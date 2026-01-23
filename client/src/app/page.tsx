@@ -7,7 +7,7 @@ import LogTerminal from '../components/LogTerminal';
 
 export default function Home() {
   const { 
-    roomId, setRoomId, joinRoom, 
+    roomId, setRoomId, joinRoom, createSecureRoom, 
     status, logs, progress, transferSpeed, sendFile 
   } = useGhostStream();
 
@@ -21,6 +21,7 @@ export default function Home() {
           roomId={roomId} 
           setRoomId={setRoomId} 
           joinRoom={joinRoom} 
+          createSecureRoom={createSecureRoom}
         />
 
         {status === 'connected' && (

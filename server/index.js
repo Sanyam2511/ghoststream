@@ -14,8 +14,17 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   
   socket.on("join_room", (roomID) => {
+    const room = io.sockets.adapter.rooms.get(roomID);
+    
+    if (room && room.size >= 2) {
+        socket.emit("room_full");
+        return;
+    }
+
     socket.join(roomID);
     socket.to(roomID).emit("user_joined", socket.id);
+    
+    console.log(`User ${socket.id} joined ${roomID}. Count: ${room ? room.size + 1 : 1}`);
   });
 
   socket.on("call_user", (payload) => {
