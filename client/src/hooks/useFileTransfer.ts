@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react';
 import { Instance as PeerInstance } from 'simple-peer';
 import { calculateFileHash } from '../utils/crypto';
+import { logTransfer } from '../utils/analyticsDB';
 
 interface UseFileTransferProps {
   peerRef: React.MutableRefObject<PeerInstance | null>;
@@ -92,6 +93,20 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   const finishTransfer = () => {
     addLog("✅ File Sent!");
     setTransferSpeed('Done');
+    
+    const duration = (Date.now() - lastSpeedRef.current.time + 1000) / 1000;
+    const finalSpeed = pendingFile.current ? (pendingFile.current.size / 1024 / 1024) / duration : 0;
+
+    if (pendingFile.current) {
+        logTransfer({
+            fileName: pendingFile.current.name,
+            fileSize: pendingFile.current.size,
+            speed: parseFloat(transferSpeed.replace(' MB/s', '')) || 0,
+            timestamp: Date.now(),
+            status: 'sent'
+        });
+    }
+
     setProgress(0);
     pendingFile.current = null;
   };
@@ -155,6 +170,8 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     const file = receivingFile.current;
     const blob = new Blob(file.chunks);
     
+    let isSuccess = false;
+
     try {
       const calculatedHash = await calculateFileHash(blob);
       if (file.expectedHash && calculatedHash !== file.expectedHash) {
@@ -163,11 +180,20 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
       } else {
         addLog("✅ Verified!");
         triggerDownload(blob, file.name);
+        isSuccess = true;
       }
     } catch (e) {
       console.error(e);
       addLog("⚠️ Verification Error");
     }
+
+    logTransfer({
+        fileName: file.name,
+        fileSize: file.size,
+        speed: parseFloat(transferSpeed.replace(' MB/s', '')) || 0,
+        timestamp: Date.now(),
+        status: isSuccess ? 'received' : 'failed'
+    });
 
     receivingFile.current = null;
     suspendedFile.current = null;

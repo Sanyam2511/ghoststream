@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import ConnectionPanel from '../components/ConnectionPanel';
 import FileTransferPanel from '../components/FileTransferPanel';
 import LogTerminal from '../components/LogTerminal';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 export default function Home() {
   const { 
@@ -33,6 +34,7 @@ export default function Home() {
         )}
 
         <LogTerminal logs={logs} />
+        <AnalyticsDashboard />
       </main>
     </div>
   );
