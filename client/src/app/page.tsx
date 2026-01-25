@@ -5,11 +5,13 @@ import ConnectionPanel from '../components/ConnectionPanel';
 import FileTransferPanel from '../components/FileTransferPanel';
 import LogTerminal from '../components/LogTerminal';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import ChatPanel from '../components/ChatPanel';
 
 export default function Home() {
   const { 
     roomId, setRoomId, joinRoom, createSecureRoom, 
-    status, logs, progress, transferSpeed, sendFile 
+    status, logs, progress, transferSpeed, sendFile,
+    messages, sendChat
   } = useGhostStream();
 
   return (
@@ -26,11 +28,19 @@ export default function Home() {
         />
 
         {status === 'connected' && (
-          <FileTransferPanel 
-            sendFile={sendFile} 
-            progress={progress} 
-            transferSpeed={transferSpeed} 
-          />
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2">
+              <FileTransferPanel 
+                sendFile={sendFile} 
+                progress={progress} 
+                transferSpeed={transferSpeed} 
+              />
+          </div>
+
+          <div className="md:col-span-1">
+               <ChatPanel messages={messages} sendChat={sendChat} />
+            </div>
+          </div>
         )}
 
         <LogTerminal logs={logs} />

@@ -3,10 +3,18 @@ import { useState, useRef } from 'react';
 import { Instance as PeerInstance } from 'simple-peer';
 import { calculateFileHash } from '../utils/crypto';
 import { logTransfer } from '../utils/analyticsDB';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UseFileTransferProps {
   peerRef: React.MutableRefObject<PeerInstance | null>;
   addLog: (msg: string) => void;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  isMe: boolean;
+  timestamp: number;
 }
 
 export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
@@ -18,6 +26,7 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   const pendingFile = useRef<File | null>(null);
   const lastSpeedRef = useRef<{ bytes: number; time: number }>({ bytes: 0, time: 0 });
 
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const sendFile = async (file: File) => {
     if (!peerRef.current) return;
@@ -111,8 +120,35 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     pendingFile.current = null;
   };
 
+  const sendChat = (text: string) => {
+    if (!peerRef.current) return;
+
+    const msg = { type: 'chat', text, timestamp: Date.now() };
+    peerRef.current.send(JSON.stringify(msg));
+
+    setMessages(prev => [...prev, { 
+        id: uuidv4(), 
+        text, 
+        isMe: true, 
+        timestamp: Date.now() 
+    }]);
+  };
+
   const handleReceiveData = async (data: any) => {
     const strData = data.toString();
+
+    if (strData.includes('"type":"chat"')) {
+      try {
+        const msg = JSON.parse(strData);
+        setMessages(prev => [...prev, { 
+            id: uuidv4(), 
+            text: msg.text, 
+            isMe: false, 
+            timestamp: msg.timestamp 
+        }]);
+      } catch (e) { console.error("Chat parse error", e); }
+      return;
+    }
 
     if (strData.includes('"type":"header"')) {
       handleIncomingHeader(JSON.parse(strData));
@@ -224,6 +260,8 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     transferSpeed,
     sendFile,
     handleReceiveData,
-    suspendTransfer
+    suspendTransfer,
+    messages,
+    sendChat
   };
 };
