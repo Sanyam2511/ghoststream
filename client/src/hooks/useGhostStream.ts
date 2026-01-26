@@ -26,7 +26,8 @@ export const useGhostStream = () => {
     handleReceiveData, 
     suspendTransfer,
     messages,
-    sendChat
+    sendChat,
+    incomingRequest, acceptRequest, rejectRequest, latency,
   } = useFileTransfer({ peerRef, addLog });
 
   useEffect(() => {
@@ -118,6 +119,6 @@ export const useGhostStream = () => {
   return {
     roomId, setRoomId, joinRoom, createSecureRoom,
     status, logs, progress, transferSpeed, sendFile,
-    messages, sendChat,
+    messages, sendChat,incomingRequest, acceptRequest, rejectRequest, latency,
   };
 };

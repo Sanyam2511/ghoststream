@@ -36,7 +36,13 @@ export const getAnalytics = async () => {
   const successful = records.filter(r => r.status !== 'failed');
   
   const totalBytes = successful.reduce((acc, curr) => acc + curr.fileSize, 0);
-  const totalGB = (totalBytes / 1024 / 1024 / 1024).toFixed(2);
+  let totalDataDisplay = "0 MB";
+  
+  if (totalBytes > 1024 * 1024 * 1024) {
+      totalDataDisplay = `${(totalBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  } else {
+      totalDataDisplay = `${(totalBytes / 1024 / 1024).toFixed(1)} MB`;
+  }
 
   const speeds = successful.map(r => r.speed).filter(s => s > 0);
   const avgSpeed = speeds.length > 0 
@@ -45,5 +51,11 @@ export const getAnalytics = async () => {
 
   const maxSpeed = speeds.length > 0 ? Math.max(...speeds).toFixed(1) : '0';
 
-  return { totalTransfers, totalGB, avgSpeed, maxSpeed, records: records.reverse().slice(0, 5) };
+  return { 
+      totalTransfers, 
+      totalDataDisplay,
+      avgSpeed, 
+      maxSpeed, 
+      records: records.reverse().slice(0, 5) 
+  };
 };

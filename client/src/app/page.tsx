@@ -6,12 +6,13 @@ import FileTransferPanel from '../components/FileTransferPanel';
 import LogTerminal from '../components/LogTerminal';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import ChatPanel from '../components/ChatPanel';
+import RequestModal from '../components/RequestModal';
 
 export default function Home() {
   const { 
     roomId, setRoomId, joinRoom, createSecureRoom, 
     status, logs, progress, transferSpeed, sendFile,
-    messages, sendChat
+    messages, sendChat,incomingRequest, acceptRequest, rejectRequest, latency,
   } = useGhostStream();
 
   return (
@@ -45,6 +46,14 @@ export default function Home() {
 
         <LogTerminal logs={logs} />
         <AnalyticsDashboard />
+        {incomingRequest && (
+            <RequestModal 
+                request={incomingRequest} 
+                latency={latency}
+                onAccept={acceptRequest}
+                onReject={rejectRequest}
+            />
+        )}
       </main>
     </div>
   );

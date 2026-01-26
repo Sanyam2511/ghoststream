@@ -4,6 +4,7 @@ import { Instance as PeerInstance } from 'simple-peer';
 import { calculateFileHash } from '../utils/crypto';
 import { logTransfer } from '../utils/analyticsDB';
 import { v4 as uuidv4 } from 'uuid';
+import { getDeviceName } from '../utils/device';
 
 interface UseFileTransferProps {
   peerRef: React.MutableRefObject<PeerInstance | null>;
@@ -17,37 +18,66 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface IncomingRequest {
+  fileName: string;
+  fileSize: number;
+  device: string;
+  fileType: string;
+  hash: string;
+}
+
 export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   const [progress, setProgress] = useState(0);
   const [transferSpeed, setTransferSpeed] = useState('');
-
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [incomingRequest, setIncomingRequest] = useState<IncomingRequest | null>(null);
+  const [latency, setLatency] = useState<number | null>(null);
   const receivingFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
-  const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string } | null>(null);
+  const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
   const pendingFile = useRef<File | null>(null);
   const lastSpeedRef = useRef<{ bytes: number; time: number }>({ bytes: 0, time: 0 });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const transferStartTime = useRef<number>(0);
+
+  const ping = () => {
+      if (!peerRef.current) return;
+      const start = Date.now();
+      peerRef.current.send(JSON.stringify({ type: 'ping', time: start }));
+  };
+
+  const updateSpeed = (currentBytes: number) => {
+    const now = Date.now();
+    const timeDiff = (now - lastSpeedRef.current.time) / 1000;
+    if (timeDiff > 0.5) {
+      const speed = ((currentBytes - lastSpeedRef.current.bytes) / 1024 / 1024) / timeDiff;
+      setTransferSpeed(`${speed.toFixed(2)} MB/s`);
+      lastSpeedRef.current = { bytes: currentBytes, time: now };
+    }
+  };
 
   const sendFile = async (file: File) => {
     if (!peerRef.current) return;
-    
+    addLog(`🔒 Preparing ${file.name}...`);
     pendingFile.current = file;
-    addLog(`🔒 Hashing file... (0%)`);
-    
+    transferStartTime.current = Date.now();
     try {
-      const fileHash = await calculateFileHash(file);
-      addLog(`🔒 Hash generated: ${fileHash.slice(0, 8)}...`);
-      addLog(`📤 Proposing: ${file.name}`);
-      
-      peerRef.current.send(JSON.stringify({ 
-        type: 'header', 
-        name: file.name, 
-        size: file.size, 
-        hash: fileHash 
-      }));
-    } catch (err) {
-      addLog("❌ Error calculating hash");
-      console.error(err);
+        const fileHash = await calculateFileHash(file);
+        addLog(`🔒 Hash generated: ${fileHash.slice(0, 8)}...`);
+
+        const header = { 
+            type: 'header', 
+            name: file.name, 
+            size: file.size, 
+            typeStr: file.type,
+            hash: fileHash,
+            device: getDeviceName()
+        };
+        
+        addLog(`📤 Proposing: ${file.name} to peer...`);
+        peerRef.current.send(JSON.stringify(header));
+    } catch (e) {
+        console.error(e);
+        addLog("❌ Error hashing file.");
     }
   };
 
@@ -71,7 +101,6 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
       reader.onload = (event) => {
         if (!event.target?.result || !peerRef.current) return;
         const chunk = new Uint8Array(event.target.result as ArrayBuffer);
-        
         const canSendMore = peerRef.current.write(chunk);
         
         offset += chunk.byteLength;
@@ -79,7 +108,11 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
         updateSpeed(offset);
 
         if (offset < file.size) {
-          canSendMore ? readSlice(offset) : peerRef.current.once('drain', () => readSlice(offset));
+          if (canSendMore) {
+              readSlice(offset);
+          } else {
+              peerRef.current.once('drain', () => readSlice(offset));
+          }
         } else {
           finishTransfer();
         }
@@ -89,31 +122,23 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     readSlice(startingOffset);
   };
 
-  const updateSpeed = (currentBytes: number) => {
-    const now = Date.now();
-    const timeDiff = (now - lastSpeedRef.current.time) / 1000;
-    if (timeDiff > 0.5) {
-      const speed = ((currentBytes - lastSpeedRef.current.bytes) / 1024 / 1024) / timeDiff;
-      setTransferSpeed(`${speed.toFixed(2)} MB/s`);
-      lastSpeedRef.current = { bytes: currentBytes, time: now };
-    }
-  };
-
   const finishTransfer = () => {
     addLog("✅ File Sent!");
     setTransferSpeed('Done');
-    
+  
     const duration = (Date.now() - lastSpeedRef.current.time + 1000) / 1000;
-    const finalSpeed = pendingFile.current ? (pendingFile.current.size / 1024 / 1024) / duration : 0;
-
+    const fileSizeMB = pendingFile.current ? pendingFile.current.size / 1024 / 1024 : 0;
+    const finalSpeed = duration > 0 ? (fileSizeMB / duration) : 0;
+    
     if (pendingFile.current) {
         logTransfer({
             fileName: pendingFile.current.name,
             fileSize: pendingFile.current.size,
-            speed: parseFloat(transferSpeed.replace(' MB/s', '')) || 0,
+            speed: finalSpeed,
             timestamp: Date.now(),
             status: 'sent'
         });
+        window.dispatchEvent(new Event('transfer-updated'));
     }
 
     setProgress(0);
@@ -150,8 +175,34 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
       return;
     }
 
+    if (strData.includes('"type":"ping"')) {
+        const msg = JSON.parse(strData);
+        peerRef.current?.send(JSON.stringify({ type: 'pong', time: msg.time }));
+        return;
+    }
+    if (strData.includes('"type":"pong"')) {
+        const msg = JSON.parse(strData);
+        setLatency(Date.now() - msg.time);
+        return;
+    }
+
     if (strData.includes('"type":"header"')) {
-      handleIncomingHeader(JSON.parse(strData));
+      const header = JSON.parse(strData);
+      
+      const fileId = `${header.name}-${header.size}`;
+      if (suspendedFile.current && suspendedFile.current.id === fileId) {
+          handleIncomingHeader(header); 
+          return;
+      }
+
+      setIncomingRequest({
+          fileName: header.name,
+          fileSize: header.size,
+          fileType: header.typeStr || 'unknown',
+          device: header.device || 'Unknown Peer',
+          hash: header.hash
+      });
+      ping(); 
       return;
     }
 
@@ -165,9 +216,29 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     }
   };
 
+  const acceptRequest = () => {
+    if (!incomingRequest) return;
+    
+    const header = {
+        name: incomingRequest.fileName,
+        size: incomingRequest.fileSize,
+        hash: incomingRequest.hash
+    };
+    
+    handleIncomingHeader(header);
+    setIncomingRequest(null);
+  };
+
+  const rejectRequest = () => {
+    setIncomingRequest(null);
+    addLog("⛔ Transfer Rejected.");
+  };
+
   const handleIncomingHeader = (header: any) => {
     const fileId = `${header.name}-${header.size}`;
     let resumeOffset = 0;
+
+    transferStartTime.current = Date.now();
 
     if (suspendedFile.current && suspendedFile.current.id === fileId) {
       addLog(`🔄 Resuming from ${Math.round((suspendedFile.current.received / suspendedFile.current.size) * 100)}%`);
@@ -223,13 +294,18 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
       addLog("⚠️ Verification Error");
     }
 
+    const duration = (Date.now() - transferStartTime.current) / 1000;
+    const fileSizeMB = receivingFile.current ? receivingFile.current.size / 1024 / 1024 : 0;
+    const finalSpeed = duration > 0 ? (fileSizeMB / duration) : 0;
+
     logTransfer({
         fileName: file.name,
         fileSize: file.size,
-        speed: parseFloat(transferSpeed.replace(' MB/s', '')) || 0,
+        speed: finalSpeed,
         timestamp: Date.now(),
         status: isSuccess ? 'received' : 'failed'
     });
+    window.dispatchEvent(new Event('transfer-updated'));
 
     receivingFile.current = null;
     suspendedFile.current = null;
@@ -262,6 +338,10 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     handleReceiveData,
     suspendTransfer,
     messages,
-    sendChat
+    sendChat,
+    incomingRequest,
+    latency,         
+    acceptRequest,  
+    rejectRequest    
   };
 };

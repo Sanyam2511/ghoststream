@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Activity, ArrowDown, ArrowUp, Database, Zap } from 'lucide-react';
 import { getAnalytics, TransferRecord } from '../utils/analyticsDB';
 
 export default function AnalyticsDashboard() {
-  const [stats, setStats] = useState<{ totalTransfers: number, totalGB: string, avgSpeed: string, maxSpeed: string, records: TransferRecord[] } | null>(null);
-
-  useEffect(() => {
+  const [stats, setStats] = useState<{ totalTransfers: number, totalDataDisplay: string, avgSpeed: string, maxSpeed: string, records: TransferRecord[] } | null>(null);
+  const refreshStats = useCallback(() => {
     getAnalytics().then(setStats);
   }, []);
+
+  useEffect(() => {
+    refreshStats();
+    window.addEventListener('transfer-updated', refreshStats);
+    return () => {
+        window.removeEventListener('transfer-updated', refreshStats);
+    };
+  }, [refreshStats]);
 
   if (!stats) return null;
 
@@ -18,7 +25,7 @@ export default function AnalyticsDashboard() {
         </h3>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Total Data" value={`${stats.totalGB} GB`} icon={<Database size={18} className="text-purple-400"/>} />
+            <StatCard label="Total Data" value={stats.totalDataDisplay} icon={<Database size={18} className="text-purple-400"/>} />
             <StatCard label="Avg Speed" value={`${stats.avgSpeed} MB/s`} icon={<Zap size={18} className="text-yellow-400"/>} />
             <StatCard label="Fastest" value={`${stats.maxSpeed} MB/s`} icon={<Activity size={18} className="text-green-400"/>} />
             <StatCard label="Transfers" value={stats.totalTransfers.toString()} icon={<ArrowUp size={18} className="text-blue-400"/>} />
