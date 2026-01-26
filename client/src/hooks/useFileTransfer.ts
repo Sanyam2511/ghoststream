@@ -59,7 +59,7 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     if (!peerRef.current) return;
     addLog(`🔒 Preparing ${file.name}...`);
     pendingFile.current = file;
-    transferStartTime.current = Date.now();
+    transferStartTime.current = performance.now();
     try {
         const fileHash = await calculateFileHash(file);
         addLog(`🔒 Hash generated: ${fileHash.slice(0, 8)}...`);
@@ -125,11 +125,17 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   const finishTransfer = () => {
     addLog("✅ File Sent!");
     setTransferSpeed('Done');
-  
-    const duration = (Date.now() - lastSpeedRef.current.time + 1000) / 1000;
-    const fileSizeMB = pendingFile.current ? pendingFile.current.size / 1024 / 1024 : 0;
-    const finalSpeed = duration > 0 ? (fileSizeMB / duration) : 0;
     
+    // CHANGE 4: High Precision Duration Calculation
+    const endTime = performance.now();
+    let durationSeconds = (endTime - transferStartTime.current) / 1000;
+    
+    // FIX: Clamp duration to a minimum of 0.1s to prevent "Infinity MB/s" on tiny files
+    if (durationSeconds < 0.1) durationSeconds = 0.1;
+
+    const fileSizeMB = pendingFile.current ? pendingFile.current.size / 1024 / 1024 : 0;
+    const finalSpeed = fileSizeMB / durationSeconds;
+
     if (pendingFile.current) {
         logTransfer({
             fileName: pendingFile.current.name,
@@ -238,7 +244,7 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     const fileId = `${header.name}-${header.size}`;
     let resumeOffset = 0;
 
-    transferStartTime.current = Date.now();
+    transferStartTime.current = performance.now();
 
     if (suspendedFile.current && suspendedFile.current.id === fileId) {
       addLog(`🔄 Resuming from ${Math.round((suspendedFile.current.received / suspendedFile.current.size) * 100)}%`);
@@ -294,9 +300,13 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
       addLog("⚠️ Verification Error");
     }
 
-    const duration = (Date.now() - transferStartTime.current) / 1000;
+    const endTime = performance.now();
+    let durationSeconds = (endTime - transferStartTime.current) / 1000;
+    
+    if (durationSeconds < 0.1) durationSeconds = 0.1;
+
     const fileSizeMB = receivingFile.current ? receivingFile.current.size / 1024 / 1024 : 0;
-    const finalSpeed = duration > 0 ? (fileSizeMB / duration) : 0;
+    const finalSpeed = fileSizeMB / durationSeconds;
 
     logTransfer({
         fileName: file.name,
