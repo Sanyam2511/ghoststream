@@ -1,12 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Activity, ArrowDown, ArrowUp, Database, Zap } from 'lucide-react';
-import { getAnalytics, TransferRecord } from '../utils/analyticsDB';
+import { Activity, ArrowDown, ArrowUp, Database, Zap, Trash2 } from 'lucide-react';
+import { getAnalytics, TransferRecord, clearAnalytics } from '../utils/analyticsDB';
 
 export default function AnalyticsDashboard() {
   const [stats, setStats] = useState<{ totalTransfers: number, totalDataDisplay: string, avgSpeed: string, maxSpeed: string, records: TransferRecord[] } | null>(null);
   const refreshStats = useCallback(() => {
     getAnalytics().then(setStats);
   }, []);
+
+  const handleClearHistory = async () => {
+    if (confirm("Are you sure you want to wipe all transfer history?")) {
+        await clearAnalytics();
+        refreshStats();
+    }
+  };
 
   useEffect(() => {
     refreshStats();
@@ -23,6 +30,13 @@ export default function AnalyticsDashboard() {
         <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-2">
             <Activity size={16}/> Transfer Analytics
         </h3>
+
+        <button 
+                onClick={handleClearHistory}
+                className="text-xs flex items-center gap-2 text-zinc-600 hover:text-red-500 transition-colors"
+            >
+                <Trash2 size={14} /> Clear History
+        </button>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <StatCard label="Total Data" value={stats.totalDataDisplay} icon={<Database size={18} className="text-purple-400"/>} />

@@ -28,6 +28,11 @@ export const logTransfer = async (record: TransferRecord) => {
   await db.add(STORE_NAME, record);
 };
 
+export const clearAnalytics = async () => {
+  const db = await initDB();
+  await db.clear(STORE_NAME);
+};
+
 export const getAnalytics = async () => {
   const db = await initDB();
   const records = await db.getAll(STORE_NAME) as TransferRecord[];
