@@ -9,7 +9,7 @@ import { MODES, TransferMode } from '../utils/modes';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
 const IDLE_TIMEOUT = 10 * 60 * 1000;
-const DESTRUCT_DELAY = 10000;
+const DESTRUCT_DELAY = 30000;
 
 export const useGhostStream = () => {
   const [roomId, setRoomId] = useState('');
@@ -43,14 +43,28 @@ export const useGhostStream = () => {
     setWarning(null);
   };
 
+  const handleRemoteCancel = () => {
+      if (destructTimerRef.current) {
+          clearTimeout(destructTimerRef.current);
+          destructTimerRef.current = null;
+      }
+      setWarning(null);
+      addLog("🛑 Peer chose to stay connected. Destruct cancelled.");
+      resetIdleTimer();
+  };
+
   const cancelSelfDestruct = () => {
-    if (destructTimerRef.current) {
-        clearTimeout(destructTimerRef.current);
-        destructTimerRef.current = null;
-    }
-    setWarning(null);
-    addLog("🛑 Self-destruct aborted. Session continued.");
-    resetIdleTimer();
+      if (destructTimerRef.current) {
+          clearTimeout(destructTimerRef.current);
+          destructTimerRef.current = null;
+      }
+      setWarning(null);
+      addLog("🛑 You chose to stay connected.");
+      resetIdleTimer();
+
+      if (peerRef.current) {
+          peerRef.current.send(JSON.stringify({ type: 'system_cancel_destruct' }));
+      }
   };
 
   const { 
@@ -75,7 +89,8 @@ export const useGhostStream = () => {
           destructTimerRef.current = setTimeout(() => {
               destroySession("Transfer Finished");
           }, DESTRUCT_DELAY);
-      } 
+      },
+      onRemoteCancel: handleRemoteCancel
   });
   const resetIdleTimer = () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
