@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react'; // <--- IMPORT SUSPENSE
 import { useGhostStream } from '../hooks/useGhostStream';
 import Header from '../components/Header';
 import ConnectionPanel from '../components/ConnectionPanel';
@@ -31,6 +31,9 @@ function DestructModal({ onCancel }: { onCancel: () => void }) {
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent opacity-50 animate-pulse" />
 
         <div className="flex flex-col items-center gap-4 mb-6">
+            <div className="p-4 bg-green-500/10 rounded-full text-green-500 animate-bounce">
+                <AlertTriangle size={32} />
+            </div>
             <div>
                 <h2 className="text-2xl font-bold text-white mb-1">Transfer Complete</h2>
                 <p className="text-zinc-400 text-sm">Transfer finished. Securing session...</p>
@@ -75,7 +78,7 @@ function DestructModal({ onCancel }: { onCancel: () => void }) {
   );
 }
 
-export default function Home() {
+function AppContent() {
   const { 
     roomId, setRoomId, joinRoom, createSecureRoom, 
     status, logs, progress, transferSpeed, sendFile,
@@ -86,7 +89,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-green-500/30">
       <Header />
-      
       {warning && <DestructModal onCancel={cancelSelfDestruct} />}
 
       <div className="max-w-4xl mx-auto p-8 pb-0">
@@ -135,5 +137,17 @@ export default function Home() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+        <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white">
+            Loading GhostStream...
+        </div>
+    }>
+        <AppContent />
+    </Suspense>
   );
 }

@@ -1,5 +1,5 @@
 import { FileText, Smartphone, Wifi, Check, X } from 'lucide-react';
-import { IncomingRequest } from '../hooks/useFileTransfer';
+import { IncomingRequest } from '../hooks/transfer/useReceiver';
 
 interface Props {
   request: IncomingRequest;
