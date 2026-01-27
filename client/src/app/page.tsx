@@ -8,13 +8,14 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import ChatPanel from '../components/ChatPanel';
 import RequestModal from '../components/RequestModal';
 import { Timer, XCircle, PlayCircle } from 'lucide-react';
+import ModeSelector from '../components/ModeSelector';
 
 export default function Home() {
   const { 
     roomId, setRoomId, joinRoom, createSecureRoom, 
     status, logs, progress, transferSpeed, sendFile,
     messages, sendChat,incomingRequest, acceptRequest, rejectRequest, latency,
-    warning, cancelSelfDestruct,
+    warning, cancelSelfDestruct, transferMode, setTransferMode
   } = useGhostStream();
 
   return (
@@ -57,6 +58,14 @@ export default function Home() {
             </div>
          </div>
       )}
+
+      <div className="mb-6">
+        <ModeSelector 
+            currentMode={transferMode} 
+            setMode={setTransferMode} 
+            disabled={status !== 'connected'} // Disable if not connected
+        />
+    </div>
 
       <main className="max-w-4xl mx-auto p-8 flex flex-col gap-8">
         <ConnectionPanel 

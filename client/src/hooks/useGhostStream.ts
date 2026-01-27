@@ -5,6 +5,7 @@ import SimplePeer, { Instance as PeerInstance } from 'simple-peer';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useFileTransfer } from './useFileTransfer';
+import { MODES, TransferMode } from '../utils/modes';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
 const IDLE_TIMEOUT = 10 * 60 * 1000;
@@ -25,6 +26,8 @@ export const useGhostStream = () => {
   
   const searchParams = useSearchParams();
   const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 9)]);
+
+  const [transferMode, setTransferMode] = useState<TransferMode>('balanced');
 
   const destroySession = (reason: string) => {
     if (peerRef.current) peerRef.current.destroy();
@@ -62,6 +65,7 @@ export const useGhostStream = () => {
   } = useFileTransfer({ 
       peerRef, 
       addLog,
+      transferMode,
       onTransferComplete: () => {
           if (destructTimerRef.current) return;
 
@@ -82,6 +86,17 @@ export const useGhostStream = () => {
           }, IDLE_TIMEOUT);
       }
   };
+
+  useEffect(() => {
+      if (latency === null) return;
+      if (latency > 150 && transferMode !== 'stable') {
+          addLog("⚠️ High Latency detected. Switching to Stable Mode.");
+          setTransferMode('stable');
+      }
+      else if (latency < 30 && transferMode !== 'speed') {
+         addLog("🚀 Excellent connection! You can use Speed Mode.");
+      }
+  }, [latency]);
 
   useEffect(() => {
       if (status === 'connected') {
@@ -195,6 +210,6 @@ export const useGhostStream = () => {
     roomId, setRoomId, joinRoom, createSecureRoom,
     status, logs, progress, transferSpeed, sendFile,
     messages, sendChat, incomingRequest, acceptRequest, rejectRequest, latency,
-    warning, cancelSelfDestruct
+    warning, cancelSelfDestruct,transferMode, setTransferMode,
   };
 };

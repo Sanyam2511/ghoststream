@@ -5,11 +5,13 @@ import { calculateFileHash } from '../utils/crypto';
 import { logTransfer } from '../utils/analyticsDB';
 import { v4 as uuidv4 } from 'uuid';
 import { getDeviceName } from '../utils/device';
+import { MODES, TransferMode } from '../utils/modes';
 
 interface UseFileTransferProps {
   peerRef: React.MutableRefObject<PeerInstance | null>;
   addLog: (msg: string) => void;
   onTransferComplete?: () => void;
+  transferMode: TransferMode;
 }
 
 export interface ChatMessage {
@@ -27,12 +29,13 @@ export interface IncomingRequest {
   hash: string;
 }
 
-export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFileTransferProps) => {
+export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferMode }: UseFileTransferProps) => {
   const [progress, setProgress] = useState(0);
   const [transferSpeed, setTransferSpeed] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [incomingRequest, setIncomingRequest] = useState<IncomingRequest | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
+  const lastUIUpdate = useRef<number>(0);
   
   const receivingFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
   const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
@@ -63,7 +66,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
     pendingFile.current = file;
     transferStartTime.current = performance.now();
     try {
-        // Fallback for non-secure contexts (HTTP)
         if (!window.crypto || !window.crypto.subtle) {
              addLog("⚠️ Security Error: Hashing requires HTTPS/Localhost. Sending without hash...");
              const header = { 
@@ -97,14 +99,15 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
   const startStreamingFile = (startingOffset: number) => {
     const file = pendingFile.current;
     if (!file || !peerRef.current) return;
+    const settings = MODES[transferMode as keyof typeof MODES]; 
+    const chunkSize = settings.chunkSize;
 
     addLog(startingOffset > 0 
-      ? `⏩ Resuming transfer from ${(startingOffset / 1024 / 1024).toFixed(2)} MB` 
-      : `🚀 Starting transfer...`);
+      ? `⏩ Resuming (${settings.label} Mode)` 
+      : `🚀 Starting (${settings.label} Mode)`);
 
     lastSpeedRef.current = { bytes: startingOffset, time: Date.now() };
     
-    const chunkSize = 64 * 1024;
     let offset = startingOffset;
 
     const readSlice = (o: number) => {
@@ -114,11 +117,17 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
       reader.onload = (event) => {
         if (!event.target?.result || !peerRef.current) return;
         const chunk = new Uint8Array(event.target.result as ArrayBuffer);
+        
         const canSendMore = peerRef.current.write(chunk);
         
         offset += chunk.byteLength;
-        setProgress(Math.round((offset / file.size) * 100));
-        updateSpeed(offset);
+
+        const now = Date.now();
+        if (now - lastUIUpdate.current > settings.uiInterval || offset >= file.size) {
+            setProgress(Math.round((offset / file.size) * 100));
+            updateSpeed(offset);
+            lastUIUpdate.current = now;
+        }
 
         if (offset < file.size) {
           if (canSendMore) {
@@ -139,7 +148,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
     addLog("✅ File Sent!");
     setTransferSpeed('Done');
 
-    // Calculate final stats
     const endTime = performance.now();
     let durationSeconds = (endTime - transferStartTime.current) / 1000;
     if (durationSeconds < 0.1) durationSeconds = 0.1;
@@ -161,7 +169,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
     setProgress(0);
     pendingFile.current = null;
     
-    // Trigger the callback BEFORE returning
     if (onTransferComplete) onTransferComplete();
     
     return true;
@@ -182,7 +189,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
   };
 
   const handleReceiveData = async (data: any) => {
-    // Optimization: Handle binary chunks immediately
     if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
         if (receivingFile.current) {
             processChunk(data);
@@ -310,7 +316,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
     let isSuccess = false;
 
     try {
-      // Security Check: Only verify if hash exists (skip if HTTP fallback used)
       if (file.expectedHash && window.crypto && window.crypto.subtle) {
           const calculatedHash = await calculateFileHash(blob);
           if (calculatedHash !== file.expectedHash) {
@@ -322,7 +327,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
             isSuccess = true;
           }
       } else {
-          // If no hash provided (insecure context), just download
           triggerDownload(blob, file.name);
           isSuccess = true;
       }
@@ -353,7 +357,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFile
     setProgress(0);
     setTransferSpeed('Complete');
     
-    // FIX: Trigger Callback BEFORE returning
     if (onTransferComplete) onTransferComplete();
     
     return true;

@@ -27,13 +27,13 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="mt-12 border-t border-white/10 pt-8">
-        <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-5 flex items-center gap-2">
             <Activity size={16}/> Transfer Analytics
         </h3>
 
         <button 
                 onClick={handleClearHistory}
-                className="text-xs flex items-center gap-2 text-zinc-600 hover:text-red-500 transition-colors"
+                className="text-sm flex items-center gap-1 text-zinc-600 mb-3 hover:text-red-500 transition-colors"
             >
                 <Trash2 size={14} /> Clear History
         </button>
