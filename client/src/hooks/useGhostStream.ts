@@ -121,12 +121,21 @@ export const useGhostStream = () => {
           if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       };
   }, [status]);
-
+  
   useEffect(() => {
     socketRef.current = io(SOCKET_URL);
     const socket = socketRef.current;
+    socket.on('connect', () => {
+        addLog(`🔌 Connected (ID: ${socket.id?.slice(0, 4)}...)`);
+        
+        const urlRoomId = searchParams.get('room');
+        if (urlRoomId) {
+            setRoomId(urlRoomId);
+            socket.emit('join_room', urlRoomId);
+            addLog(`🔐 Joining Room from Link...`);
+        }
+    });
 
-    socket.on('connect', () => addLog(`🔌 Connected (ID: ${socket.id?.slice(0, 4)}...)`));
     socket.on("user_joined", (id) => { addLog(`👤 User joined!`); callUser(id); });
     socket.on("receiving_call", (data) => { addLog(`📞 Receiving call...`); acceptCall(data); });
     socket.on("call_accepted", (signal) => { addLog("✅ Connection Locked"); peerRef.current?.signal(signal); });
@@ -145,12 +154,6 @@ export const useGhostStream = () => {
     const urlRoomId = searchParams.get('room');
     if (urlRoomId) {
         setRoomId(urlRoomId);
-        setTimeout(() => {
-            if (socket.connected) {
-                socket.emit('join_room', urlRoomId);
-                addLog(`🔐 Joining Secure Room...`);
-            }
-        }, 500);
     }
 
     const handleTabClose = () => socket.disconnect();
