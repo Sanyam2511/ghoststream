@@ -11,7 +11,7 @@ const io = require("socket.io")(server, {
   cors: {
     origin: [
       "http://localhost:3000",
-      "https://ghoststream-vbbi.vercel.app/"
+      "https://ghoststream-vbbi.vercel.app"
     ],
     methods: ["GET", "POST"]
   }
@@ -28,7 +28,7 @@ io.on('connection', (socket) => {
     }
 
     socket.join(roomID);
-    socket.to(roomID).emit("user_joined", socket.id);
+    socket.to(roomID).emit("user_joined", socket.id); 
     
     console.log(`User ${socket.id} joined ${roomID}. Count: ${room ? room.size + 1 : 1}`);
   });
@@ -55,4 +55,5 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3001, () => console.log("SERVER RUNNING ON 3001"));
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`SERVER RUNNING ON ${PORT}`));
