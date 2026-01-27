@@ -9,6 +9,7 @@ import { getDeviceName } from '../utils/device';
 interface UseFileTransferProps {
   peerRef: React.MutableRefObject<PeerInstance | null>;
   addLog: (msg: string) => void;
+  onTransferComplete?: () => void;
 }
 
 export interface ChatMessage {
@@ -26,12 +27,13 @@ export interface IncomingRequest {
   hash: string;
 }
 
-export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
+export const useFileTransfer = ({ peerRef, addLog, onTransferComplete }: UseFileTransferProps) => {
   const [progress, setProgress] = useState(0);
   const [transferSpeed, setTransferSpeed] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [incomingRequest, setIncomingRequest] = useState<IncomingRequest | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
+  
   const receivingFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
   const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: ArrayBuffer[]; id: string; expectedHash?: string } | null>(null);
   const pendingFile = useRef<File | null>(null);
@@ -61,6 +63,17 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     pendingFile.current = file;
     transferStartTime.current = performance.now();
     try {
+        // Fallback for non-secure contexts (HTTP)
+        if (!window.crypto || !window.crypto.subtle) {
+             addLog("⚠️ Security Error: Hashing requires HTTPS/Localhost. Sending without hash...");
+             const header = { 
+                type: 'header', name: file.name, size: file.size, 
+                typeStr: file.type, hash: '', device: getDeviceName() 
+             };
+             peerRef.current.send(JSON.stringify(header));
+             return;
+        }
+
         const fileHash = await calculateFileHash(file);
         addLog(`🔒 Hash generated: ${fileHash.slice(0, 8)}...`);
 
@@ -68,9 +81,9 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
             type: 'header', 
             name: file.name, 
             size: file.size, 
-            typeStr: file.type,
-            hash: fileHash,
-            device: getDeviceName()
+            typeStr: file.type, 
+            hash: fileHash, 
+            device: getDeviceName() 
         };
         
         addLog(`📤 Proposing: ${file.name} to peer...`);
@@ -125,12 +138,10 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   const finishTransfer = () => {
     addLog("✅ File Sent!");
     setTransferSpeed('Done');
-    
-    // CHANGE 4: High Precision Duration Calculation
+
+    // Calculate final stats
     const endTime = performance.now();
     let durationSeconds = (endTime - transferStartTime.current) / 1000;
-    
-    // FIX: Clamp duration to a minimum of 0.1s to prevent "Infinity MB/s" on tiny files
     if (durationSeconds < 0.1) durationSeconds = 0.1;
 
     const fileSizeMB = pendingFile.current ? pendingFile.current.size / 1024 / 1024 : 0;
@@ -149,6 +160,11 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
 
     setProgress(0);
     pendingFile.current = null;
+    
+    // Trigger the callback BEFORE returning
+    if (onTransferComplete) onTransferComplete();
+    
+    return true;
   };
 
   const sendChat = (text: string) => {
@@ -166,6 +182,14 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
   };
 
   const handleReceiveData = async (data: any) => {
+    // Optimization: Handle binary chunks immediately
+    if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+        if (receivingFile.current) {
+            processChunk(data);
+            return;
+        }
+    }
+
     const strData = data.toString();
 
     if (strData.includes('"type":"chat"')) {
@@ -286,14 +310,21 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     let isSuccess = false;
 
     try {
-      const calculatedHash = await calculateFileHash(blob);
-      if (file.expectedHash && calculatedHash !== file.expectedHash) {
-        addLog("❌ INTEGRITY FAILED! File corrupt.");
-        alert("Hash Mismatch!");
+      // Security Check: Only verify if hash exists (skip if HTTP fallback used)
+      if (file.expectedHash && window.crypto && window.crypto.subtle) {
+          const calculatedHash = await calculateFileHash(blob);
+          if (calculatedHash !== file.expectedHash) {
+            addLog("❌ INTEGRITY FAILED! File corrupt.");
+            alert("Hash Mismatch!");
+          } else {
+            addLog("✅ Verified!");
+            triggerDownload(blob, file.name);
+            isSuccess = true;
+          }
       } else {
-        addLog("✅ Verified!");
-        triggerDownload(blob, file.name);
-        isSuccess = true;
+          // If no hash provided (insecure context), just download
+          triggerDownload(blob, file.name);
+          isSuccess = true;
       }
     } catch (e) {
       console.error(e);
@@ -321,6 +352,11 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     suspendedFile.current = null;
     setProgress(0);
     setTransferSpeed('Complete');
+    
+    // FIX: Trigger Callback BEFORE returning
+    if (onTransferComplete) onTransferComplete();
+    
+    return true;
   };
 
   const triggerDownload = (blob: Blob, name: string) => {
@@ -350,8 +386,10 @@ export const useFileTransfer = ({ peerRef, addLog }: UseFileTransferProps) => {
     messages,
     sendChat,
     incomingRequest,
-    latency,         
+    latency,        
     acceptRequest,  
-    rejectRequest    
+    rejectRequest,
+    finishTransfer, 
+    finalizeDownload  
   };
 };
