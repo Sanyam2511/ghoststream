@@ -2,15 +2,15 @@
 
 > **Secure, Serverless, Peer-to-Peer File Transfer.** > *No Cloud. No Limits. Just Physics.*
 
-![GhostStream Banner](https://via.placeholder.com/1200x600/0a0a0a/ffffff?text=GhostStream+Preview)
-*(Replace this image link with a real screenshot of your app)*
+<img width="2493" height="1269" alt="image" src="https://github.com/user-attachments/assets/10856a41-6a98-40ba-9751-0e237ea66c68" />
+
 
 ---
 
 ## Live Demo
 
-- **Frontend:** [https://ghoststream-app.vercel.app](https://your-vercel-link-here)
-- **Backend:** [https://ghoststream-server.onrender.com](https://your-render-link-here)
+- **Frontend:** [https://ghoststream-vbbi.vercel.app](ghoststream-vbbi.vercel.app)
+- **Backend:** [https://ghoststream-server.onrender.com](https://ghoststream-server.onrender.com)
 
 ---
 
@@ -78,6 +78,7 @@ This architecture ensures **maximum privacy**, **zero bandwidth costs** for the 
 ```bash
 git clone [https://github.com/yourusername/ghoststream.git](https://github.com/yourusername/ghoststream.git)
 cd ghoststream
+```
 
 ### 2. Setup Backend (Signaling Server)
 ```bash
@@ -85,12 +86,14 @@ cd server
 npm install
 # Start the server on port 3001
 npm start
+```
 
 ### 3. Setup Frontend (Client)
 Open a new terminal window:
 ```bash
 cd client
 npm install
+```
 
 # Create .env.local file
 echo "NEXT_PUBLIC_SOCKET_URL=http://localhost:3001" > .env.local
@@ -113,5 +116,6 @@ npm run dev
   └── /utils
       ├── analyticsDB.ts          # IndexedDB Wrapper
       └── modes.ts                # Configuration for Speed/Stable modes
+
 
 
