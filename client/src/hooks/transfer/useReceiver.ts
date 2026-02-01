@@ -147,8 +147,14 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
   };
 
   const rejectRequest = () => {
+    if (incomingRequest && peerRef.current) {
+        peerRef.current.send(JSON.stringify({ 
+            type: 'transfer_rejected', 
+            fileName: incomingRequest.fileName 
+        }));
+    }
     setIncomingRequest(null);
-    addLog("⛔ Rejected.");
+    addLog("⛔ You rejected the file.");
   };
 
   const suspendTransfer = () => {

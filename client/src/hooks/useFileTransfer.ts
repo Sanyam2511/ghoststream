@@ -93,6 +93,12 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
         if (onRemoteCancel) onRemoteCancel();
         return;
     }
+
+    if (strData.includes('"type":"transfer_rejected"')) {
+        addLog("⛔ Peer rejected the file. Skipping...");
+        handleSenderComplete(); 
+        return;
+    }
     
     if (strData.includes('"type":"chat"')) {
         try { messaging.receiveChat(JSON.parse(strData)); } catch(e) {}
