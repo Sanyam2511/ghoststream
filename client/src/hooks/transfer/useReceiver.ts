@@ -9,7 +9,7 @@ interface ReceiverProps {
   addLog: (msg: string) => void;
   setProgress: (p: number) => void;
   setTransferSpeed: (s: string) => void;
-  onComplete: () => void;
+  onComplete: (isLast: boolean) => void; 
 }
 
 export interface IncomingRequest {
@@ -18,6 +18,7 @@ export interface IncomingRequest {
   device: string;
   fileType: string;
   hash: string;
+  isLast: boolean;
 }
 
 export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, onComplete }: ReceiverProps) => {
@@ -27,12 +28,22 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
       name: string; 
       size: number; 
       received: number; 
-      chunks: (ArrayBuffer | Uint8Array)[];
+      chunks: (ArrayBuffer | Uint8Array)[]; 
       id: string; 
-      expectedHash?: string 
+      expectedHash?: string;
+      isLast: boolean;
   } | null>(null);
 
-  const suspendedFile = useRef<{ name: string; size: number; received: number; chunks: (ArrayBuffer | Uint8Array)[]; id: string; expectedHash?: string } | null>(null);
+  const suspendedFile = useRef<{ 
+      name: string; 
+      size: number; 
+      received: number; 
+      chunks: (ArrayBuffer | Uint8Array)[]; 
+      id: string; 
+      expectedHash?: string;
+      isLast: boolean;
+  } | null>(null);
+  
   const transferStartTime = useRef<number>(0);
 
   const handleIncomingHeader = (header: any) => {
@@ -48,8 +59,13 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     } else {
       addLog(`📥 Incoming: ${header.name}`);
       receivingFile.current = { 
-        name: header.name, size: header.size, received: 0, 
-        chunks: [], id: fileId, expectedHash: header.hash 
+        name: header.name, 
+        size: header.size, 
+        received: 0, 
+        chunks: [], 
+        id: fileId, 
+        expectedHash: header.hash,
+        isLast: header.isLast 
       };
     }
     
@@ -72,7 +88,8 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
   const finalizeDownload = async () => {
     if (!receivingFile.current) return;
     const file = receivingFile.current;
-    const blob = new Blob(file.chunks as any);
+    const blob = new Blob(file.chunks as any); 
+    
     let isSuccess = false;
 
     addLog("🔍 Verifying Integrity...");
@@ -102,11 +119,13 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     });
     window.dispatchEvent(new Event('transfer-updated'));
 
+    const wasLastFile = file.isLast;
+
     receivingFile.current = null;
     suspendedFile.current = null;
     setProgress(0);
-    setTransferSpeed('Complete');
-    onComplete();
+    setTransferSpeed(wasLastFile ? 'Complete' : 'Waiting for next...');
+    onComplete(wasLastFile);
   };
 
   const triggerDownload = (blob: Blob, name: string) => {
@@ -118,7 +137,12 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
 
   const acceptRequest = () => {
     if (!incomingRequest) return;
-    handleIncomingHeader({ name: incomingRequest.fileName, size: incomingRequest.fileSize, hash: incomingRequest.hash });
+    handleIncomingHeader({ 
+        name: incomingRequest.fileName, 
+        size: incomingRequest.fileSize, 
+        hash: incomingRequest.hash,
+        isLast: incomingRequest.isLast
+    });
     setIncomingRequest(null);
   };
 

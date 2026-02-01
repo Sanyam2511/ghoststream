@@ -20,7 +20,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
   const fileQueue = useRef<File[]>([]);
   const isProcessing = useRef(false);
   const [queueCount, setQueueCount] = useState(0);
-
   const messaging = useMessaging(peerRef);
   
   const handleSenderComplete = () => {
@@ -30,6 +29,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
           processNextInQueue();
       } else {
           isProcessing.current = false;
+          addLog("✅ All files sent successfully!");
           if (onTransferComplete) onTransferComplete();
       }
   };
@@ -48,8 +48,13 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     addLog,
     setProgress,
     setTransferSpeed,
-    onComplete: () => {
-        if (onTransferComplete) onTransferComplete();
+    onComplete: (isLast: boolean) => {
+        if (isLast) {
+             addLog("🏁 Queue finished. Closing session soon...");
+             if (onTransferComplete) onTransferComplete();
+        } else {
+             addLog("⏳ Waiting for next file in queue...");
+        }
     }
   });
 
@@ -69,8 +74,9 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
       
       isProcessing.current = true;
       const nextFile = fileQueue.current[0];
+      const isLast = fileQueue.current.length === 1;
       setTimeout(() => {
-          sender.sendFile(nextFile);
+          sender.sendFile(nextFile, isLast);
       }, 500);
   };
 
@@ -83,7 +89,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     }
 
     const strData = data.toString();
-
     if (strData.includes('"type":"system_cancel_destruct"')) {
         if (onRemoteCancel) onRemoteCancel();
         return;
@@ -93,6 +98,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
         try { messaging.receiveChat(JSON.parse(strData)); } catch(e) {}
         return;
     }
+    
     if (messaging.handlePingPong(strData)) return;
 
     if (strData.includes('"type":"header"')) {
@@ -100,8 +106,12 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
         if (onRemoteCancel) onRemoteCancel(); 
 
         receiver.setIncomingRequest({
-            fileName: header.name, fileSize: header.size, 
-            fileType: header.typeStr, device: header.device, hash: header.hash
+            fileName: header.name, 
+            fileSize: header.size, 
+            fileType: header.typeStr, 
+            device: header.device, 
+            hash: header.hash,
+            isLast: header.isLast
         });
         messaging.ping(); 
         return;
