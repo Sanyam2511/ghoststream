@@ -81,7 +81,7 @@ function DestructModal({ onCancel }: { onCancel: () => void }) {
 function AppContent() {
   const { 
     roomId, setRoomId, joinRoom, createSecureRoom, 
-    status, logs, progress, transferSpeed, sendFile,
+    status, logs, progress, transferSpeed, sendFiles, queueCount,
     messages, sendChat, incomingRequest, acceptRequest, rejectRequest, latency,
     warning, cancelSelfDestruct, transferMode, setTransferMode
   } = useGhostStream();
@@ -112,9 +112,10 @@ function AppContent() {
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-2">
               <FileTransferPanel 
-                sendFile={sendFile} 
-                progress={progress} 
-                transferSpeed={transferSpeed} 
+                  sendFiles={sendFiles}
+                  progress={progress} 
+                  transferSpeed={transferSpeed} 
+                  queueCount={queueCount}
               />
             </div>
 

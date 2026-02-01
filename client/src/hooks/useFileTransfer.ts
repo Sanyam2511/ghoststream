@@ -1,5 +1,5 @@
 // src/hooks/useFileTransfer.ts
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Instance as PeerInstance } from 'simple-peer';
 import { TransferMode } from '../utils/modes';
 import { useSender } from './transfer/useSender';
@@ -14,19 +14,33 @@ interface UseFileTransferProps {
   transferMode: TransferMode;
 }
 
-export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferMode, onRemoteCancel }: UseFileTransferProps) => {
+export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteCancel, transferMode }: UseFileTransferProps) => {
   const [progress, setProgress] = useState(0);
   const [transferSpeed, setTransferSpeed] = useState('');
+  const fileQueue = useRef<File[]>([]);
+  const isProcessing = useRef(false);
+  const [queueCount, setQueueCount] = useState(0);
 
   const messaging = useMessaging(peerRef);
   
+  const handleSenderComplete = () => {
+      fileQueue.current.shift();
+      setQueueCount(fileQueue.current.length);
+      if (fileQueue.current.length > 0) {
+          processNextInQueue();
+      } else {
+          isProcessing.current = false;
+          if (onTransferComplete) onTransferComplete();
+      }
+  };
+
   const sender = useSender({
     peerRef,
     addLog,
     transferMode,
     setProgress,
     setTransferSpeed,
-    onComplete: () => onTransferComplete?.()
+    onComplete: handleSenderComplete
   });
 
   const receiver = useReceiver({
@@ -34,8 +48,31 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferM
     addLog,
     setProgress,
     setTransferSpeed,
-    onComplete: () => onTransferComplete?.()
+    onComplete: () => {
+        if (onTransferComplete) onTransferComplete();
+    }
   });
+
+  const sendFiles = (files: File[]) => {
+      if (files.length === 0) return;
+      fileQueue.current.push(...files);
+      setQueueCount(fileQueue.current.length);
+      
+      addLog(`📚 Queued ${files.length} files. Total: ${fileQueue.current.length}`);
+      if (!isProcessing.current) {
+          processNextInQueue();
+      }
+  };
+
+  const processNextInQueue = () => {
+      if (!peerRef.current || fileQueue.current.length === 0) return;
+      
+      isProcessing.current = true;
+      const nextFile = fileQueue.current[0];
+      setTimeout(() => {
+          sender.sendFile(nextFile);
+      }, 500);
+  };
 
   const handleReceiveData = async (data: any) => {
     if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
@@ -51,7 +88,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferM
         if (onRemoteCancel) onRemoteCancel();
         return;
     }
-
+    
     if (strData.includes('"type":"chat"')) {
         try { messaging.receiveChat(JSON.parse(strData)); } catch(e) {}
         return;
@@ -60,11 +97,13 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferM
 
     if (strData.includes('"type":"header"')) {
         const header = JSON.parse(strData);
+        if (onRemoteCancel) onRemoteCancel(); 
+
         receiver.setIncomingRequest({
             fileName: header.name, fileSize: header.size, 
             fileType: header.typeStr, device: header.device, hash: header.hash
         });
-        messaging.ping();
+        messaging.ping(); 
         return;
     }
 
@@ -77,7 +116,8 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, transferM
   return {
     progress,
     transferSpeed,
-    sendFile: sender.sendFile,
+    sendFiles,
+    queueCount,
     incomingRequest: receiver.incomingRequest,
     acceptRequest: receiver.acceptRequest,
     rejectRequest: receiver.rejectRequest,
