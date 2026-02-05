@@ -1,4 +1,4 @@
-import { Upload, FileText, Layers } from 'lucide-react';
+import { Upload, FileText, Layers, XOctagon } from 'lucide-react';
 import { useRef } from 'react';
 
 interface Props {
@@ -6,9 +6,10 @@ interface Props {
   progress: number;
   transferSpeed: string;
   queueCount: number;
+  onCancel: () => void;
 }
 
-export default function FileTransferPanel({ sendFiles, progress, transferSpeed, queueCount }: Props) {
+export default function FileTransferPanel({ sendFiles, progress, transferSpeed, queueCount, onCancel }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,6 +74,16 @@ export default function FileTransferPanel({ sendFiles, progress, transferSpeed, 
           <span className="text-xs text-zinc-500">{progress}% Complete</span>
         </div>
       </div>
+
+      {queueCount > 0 && (
+            <button 
+                onClick={onCancel}
+                className="mt-4 w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-colors"
+            >
+                <XOctagon size={16} />
+                Cancel & Clear Queue
+            </button>
+        )}
     </div>
   );
 }

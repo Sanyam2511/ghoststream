@@ -72,6 +72,7 @@ export const useGhostStream = () => {
     transferSpeed, 
     sendFiles,
     queueCount,
+    cancelTransfer,
     handleReceiveData, 
     suspendTransfer,
     messages,
@@ -227,7 +228,7 @@ export const useGhostStream = () => {
 
   return {
     roomId, setRoomId, joinRoom, createSecureRoom,
-    status, logs, progress, transferSpeed, sendFiles, queueCount,
+    status, logs, progress, transferSpeed, sendFiles, queueCount, cancelTransfer,
     messages, sendChat, incomingRequest, acceptRequest, rejectRequest, latency,
     warning, cancelSelfDestruct,transferMode, setTransferMode,
   };

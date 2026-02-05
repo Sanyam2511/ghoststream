@@ -46,6 +46,13 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
   
   const transferStartTime = useRef<number>(0);
 
+  const reset = () => {
+      receivingFile.current = null;
+      setIncomingRequest(null);
+      setProgress(0);
+      setTransferSpeed('');
+  };
+
   const handleIncomingHeader = (header: any) => {
     const fileId = `${header.name}-${header.size}`;
     let resumeOffset = 0;
@@ -170,6 +177,6 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     acceptRequest, rejectRequest,
     handleIncomingHeader, processChunk,
     suspendTransfer,
-    receivingFile
+    receivingFile, reset
   };
 };

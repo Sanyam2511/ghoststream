@@ -73,6 +73,26 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     }
   });
 
+  const cancelTransfer = () => {
+      isProcessing.current = false;
+      sender.stop();
+      receiver.reset();
+
+      const count = fileQueue.current.length;
+      fileQueue.current = [];
+      setQueueCount(0);
+      
+      setProgress(0);
+      setTransferSpeed('Cancelled');
+      if (peerRef.current && peerRef.current.connected) {
+          try {
+              peerRef.current.send(JSON.stringify({ type: 'transfer_cancelled' }));
+          } catch(e) {}
+      }
+
+      addLog(`🛑 Cancelled. Cleared ${count} files from queue.`);
+  };
+
   const sendFiles = (files: File[]) => {
       if (files.length === 0) return;
       
@@ -158,6 +178,18 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
         sender.startStreaming(JSON.parse(strData).offset);
         return;
     }
+
+    if (strData.includes('"type":"transfer_cancelled"')) {
+        addLog("⚠️ Peer cancelled the transfer.");
+        isProcessing.current = false;
+        sender.stop();
+        receiver.reset();
+        fileQueue.current = [];
+        setQueueCount(0);
+        setProgress(0);
+        setTransferSpeed('Peer Cancelled');
+        return;
+    }
   };
 
   return {
@@ -165,6 +197,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     transferSpeed,
     sendFiles,
     queueCount,
+    cancelTransfer,
     incomingRequest: receiver.incomingRequest,
     acceptRequest: receiver.acceptRequest,
     rejectRequest: receiver.rejectRequest,
