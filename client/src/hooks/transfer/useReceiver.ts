@@ -48,12 +48,18 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
 
   const reset = () => {
       receivingFile.current = null;
+      suspendedFile.current = null;
       setIncomingRequest(null);
       setProgress(0);
       setTransferSpeed('');
   };
 
   const handleIncomingHeader = (header: any) => {
+    if (receivingFile.current) {
+        addLog("⚠️ Found stuck transfer. Overwriting with new file...");
+        reset(); 
+    }
+    
     const fileId = `${header.name}-${header.size}`;
     let resumeOffset = 0;
     transferStartTime.current = performance.now();
