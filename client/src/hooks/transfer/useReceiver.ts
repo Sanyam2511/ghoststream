@@ -133,11 +133,12 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     window.dispatchEvent(new Event('transfer-updated'));
 
     const wasLastFile = file.isLast;
-
     receivingFile.current = null;
     suspendedFile.current = null;
+    setIncomingRequest(null);
     setProgress(0);
     setTransferSpeed(wasLastFile ? 'Complete' : 'Waiting for next...');
+    
     onComplete(wasLastFile);
   };
 

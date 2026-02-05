@@ -26,6 +26,8 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
   
   const parseData = (data: any): string => {
       if (typeof data === 'string') return data;
+      if (data.byteLength > 1000) return ''; 
+
       if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
           try {
               return new TextDecoder().decode(data);
@@ -123,18 +125,24 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
              isProcessing.current = false;
              addLog("⚠️ Error starting transfer");
           }
-      }, 500);
+      }, 1000);
   };
 
   const handleReceiveData = async (data: any) => {
-    if (receiver.receivingFile.current) {
-        if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
-            receiver.processChunk(data);
-            return;
-        }
-    }
-
     const strData = parseData(data);
+
+    if (strData.includes('"type":"transfer_cancelled"')) {
+        addLog("⚠️ Peer cancelled the transfer.");
+        isProcessing.current = false;
+        sender.stop();
+        receiver.reset();
+        
+        fileQueue.current = [];
+        setQueueCount(0);
+        setProgress(0);
+        setTransferSpeed('Peer Cancelled');
+        return;
+    }
 
     if (strData.includes('"type":"system_cancel_destruct"')) {
         if (onRemoteCancel) onRemoteCancel();
@@ -146,7 +154,12 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
         handleSenderComplete(); 
         return;
     }
-    
+    if (receiver.receivingFile.current) {
+        if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+            receiver.processChunk(data);
+            return;
+        }
+    }
     if (strData.includes('"type":"chat"')) {
         try { messaging.receiveChat(JSON.parse(strData)); } catch(e) {}
         return;
@@ -176,18 +189,6 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
 
     if (strData.includes('"type":"resume_ack"')) {
         sender.startStreaming(JSON.parse(strData).offset);
-        return;
-    }
-
-    if (strData.includes('"type":"transfer_cancelled"')) {
-        addLog("⚠️ Peer cancelled the transfer.");
-        isProcessing.current = false;
-        sender.stop();
-        receiver.reset();
-        fileQueue.current = [];
-        setQueueCount(0);
-        setProgress(0);
-        setTransferSpeed('Peer Cancelled');
         return;
     }
   };
