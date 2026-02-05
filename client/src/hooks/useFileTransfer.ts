@@ -17,14 +17,29 @@ interface UseFileTransferProps {
 export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteCancel, transferMode }: UseFileTransferProps) => {
   const [progress, setProgress] = useState(0);
   const [transferSpeed, setTransferSpeed] = useState('');
+  
   const fileQueue = useRef<File[]>([]);
   const isProcessing = useRef(false);
   const [queueCount, setQueueCount] = useState(0);
+
   const messaging = useMessaging(peerRef);
   
+  const parseData = (data: any): string => {
+      if (typeof data === 'string') return data;
+      if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+          try {
+              return new TextDecoder().decode(data);
+          } catch (e) {
+              return ''; 
+          }
+      }
+      return data.toString();
+  };
+
   const handleSenderComplete = () => {
       fileQueue.current.shift();
       setQueueCount(fileQueue.current.length);
+
       if (fileQueue.current.length > 0) {
           processNextInQueue();
       } else {
@@ -60,35 +75,47 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
 
   const sendFiles = (files: File[]) => {
       if (files.length === 0) return;
+      
       fileQueue.current.push(...files);
       setQueueCount(fileQueue.current.length);
       
       addLog(`📚 Queued ${files.length} files. Total: ${fileQueue.current.length}`);
+
       if (!isProcessing.current) {
           processNextInQueue();
       }
   };
 
   const processNextInQueue = () => {
-      if (!peerRef.current || fileQueue.current.length === 0) return;
+      if (!peerRef.current || fileQueue.current.length === 0) {
+          isProcessing.current = false;
+          return;
+      }
       
       isProcessing.current = true;
       const nextFile = fileQueue.current[0];
-      const isLast = fileQueue.current.length === 1;
+
       setTimeout(() => {
-          sender.sendFile(nextFile, isLast);
+          try {
+             const currentIsLast = fileQueue.current.length === 1;
+             sender.sendFile(nextFile, currentIsLast);
+          } catch (err) {
+             isProcessing.current = false;
+             addLog("⚠️ Error starting transfer");
+          }
       }, 500);
   };
 
   const handleReceiveData = async (data: any) => {
-    if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
-        if (receiver.receivingFile.current) {
+    if (receiver.receivingFile.current) {
+        if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
             receiver.processChunk(data);
             return;
         }
     }
 
-    const strData = data.toString();
+    const strData = parseData(data);
+
     if (strData.includes('"type":"system_cancel_destruct"')) {
         if (onRemoteCancel) onRemoteCancel();
         return;
@@ -108,18 +135,22 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     if (messaging.handlePingPong(strData)) return;
 
     if (strData.includes('"type":"header"')) {
-        const header = JSON.parse(strData);
-        if (onRemoteCancel) onRemoteCancel(); 
+        try {
+            const header = JSON.parse(strData);
+            if (onRemoteCancel) onRemoteCancel(); 
 
-        receiver.setIncomingRequest({
-            fileName: header.name, 
-            fileSize: header.size, 
-            fileType: header.typeStr, 
-            device: header.device, 
-            hash: header.hash,
-            isLast: header.isLast
-        });
-        messaging.ping(); 
+            receiver.setIncomingRequest({
+                fileName: header.name, 
+                fileSize: header.size, 
+                fileType: header.typeStr, 
+                device: header.device, 
+                hash: header.hash,
+                isLast: header.isLast
+            });
+            messaging.ping(); 
+        } catch (e) {
+            console.error("Failed to parse header", e);
+        }
         return;
     }
 
