@@ -25,7 +25,12 @@ export const useGhostStream = () => {
   const destructTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const searchParams = useSearchParams();
-  const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 9)]);
+
+  // --- CYBERPUNK LOGGING ---
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('en-GB', { hour12: false }); // 14:30:22
+    setLogs(prev => [`${time} | ${msg}`, ...prev.slice(0, 9)]);
+  };
 
   const [transferMode, setTransferMode] = useState<TransferMode>('balanced');
 
@@ -35,7 +40,7 @@ export const useGhostStream = () => {
     setRoomId('');
     window.history.pushState({}, '', window.location.pathname);
     setStatus("idle");
-    addLog(`💥 Session Destroyed: ${reason}`);
+    addLog(`SYS  : Session Destroyed: ${reason}`);
     
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (destructTimerRef.current) clearTimeout(destructTimerRef.current);
@@ -49,7 +54,7 @@ export const useGhostStream = () => {
           destructTimerRef.current = null;
       }
       setWarning(null);
-      addLog("🛑 Peer chose to stay connected. Destruct cancelled.");
+      addLog("INFO : Peer cancelled auto-destruct.");
       resetIdleTimer();
   };
 
@@ -59,7 +64,7 @@ export const useGhostStream = () => {
           destructTimerRef.current = null;
       }
       setWarning(null);
-      addLog("🛑 You chose to stay connected.");
+      addLog("INFO : Auto-destruct cancelled.");
       resetIdleTimer();
 
       if (peerRef.current) {
@@ -85,7 +90,7 @@ export const useGhostStream = () => {
       onTransferComplete: () => {
           if (destructTimerRef.current) return;
 
-          addLog(`⏳ Transfer Complete. Auto-closing in ${DESTRUCT_DELAY/1000}s...`);
+          addLog(`SYS  : Transfer complete. Auto-closing in ${DESTRUCT_DELAY/1000}s...`);
           setWarning({ text: "Transfer Complete. Room closing in", timer: 10 });
 
           destructTimerRef.current = setTimeout(() => {
@@ -107,11 +112,11 @@ export const useGhostStream = () => {
   useEffect(() => {
       if (latency === null) return;
       if (latency > 150 && transferMode !== 'stable') {
-          addLog("⚠️ High Latency detected. Switching to Stable Mode.");
+          addLog("NET  : High latency detected. Mode: Stable.");
           setTransferMode('stable');
       }
       else if (latency < 30 && transferMode !== 'speed') {
-         addLog("🚀 Excellent connection! You can use Speed Mode.");
+         addLog("NET  : Low latency. Mode: Speed.");
       }
   }, [latency]);
 
@@ -128,27 +133,27 @@ export const useGhostStream = () => {
     socketRef.current = io(SOCKET_URL);
     const socket = socketRef.current;
     socket.on('connect', () => {
-        addLog(`🔌 Connected (ID: ${socket.id?.slice(0, 4)}...)`);
+        addLog(`CONN : Connected (ID: ${socket.id?.slice(0, 4)}...)`);
         
         const urlRoomId = searchParams.get('room');
         if (urlRoomId) {
             setRoomId(urlRoomId);
             socket.emit('join_room', urlRoomId);
-            addLog(`🔐 Joining Room from Link...`);
+            addLog(`AUTH : Joining Room from Link...`);
         }
     });
 
-    socket.on("user_joined", (id) => { addLog(`👤 User joined!`); callUser(id); });
-    socket.on("receiving_call", (data) => { addLog(`📞 Receiving call...`); acceptCall(data); });
-    socket.on("call_accepted", (signal) => { addLog("✅ Connection Locked"); peerRef.current?.signal(signal); });
+    socket.on("user_joined", (id) => { addLog(`PEER : User joined room.`); callUser(id); });
+    socket.on("receiving_call", (data) => { addLog(`PEER : Incoming connection request...`); acceptCall(data); });
+    socket.on("call_accepted", (signal) => { addLog("SEC  : Connection established (P2P)."); peerRef.current?.signal(signal); });
     
     socket.on("user_disconnected", () => {
-      addLog("🔴 Peer disconnected.");
+      addLog("PEER : Peer disconnected.");
       resetConnection();
     });
 
     socket.on("room_full", () => {
-        addLog("⛔ Room Full.");
+        addLog("ERR  : Room is full.");
         setStatus("full");
         socket.disconnect();
     });
@@ -171,7 +176,7 @@ export const useGhostStream = () => {
     const newId = uuidv4();
     setRoomId(newId);
     socketRef.current?.emit('join_room', newId);
-    addLog(`🛡️ Room Created: ${newId.slice(0,8)}...`);
+    addLog(`SYS  : Secure room created: ${newId.slice(0,8)}...`);
     window.history.pushState({}, '', `?room=${newId}`);
   };
 
@@ -182,7 +187,7 @@ export const useGhostStream = () => {
     setRoomId('');
     window.history.pushState({}, '', window.location.pathname);
     setStatus("idle");
-    addLog("🔒 Session Ended.");
+    addLog("SYS  : Session Ended.");
     
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (destructTimerRef.current) clearTimeout(destructTimerRef.current);
@@ -192,7 +197,7 @@ export const useGhostStream = () => {
   const handlePeerEvents = (peer: PeerInstance) => {
     peer.on("connect", () => { 
         setStatus("connected"); 
-        addLog("🚀 Tunnel Established"); 
+        addLog("NET  : P2P Tunnel Established."); 
         resetIdleTimer();
     });
     
@@ -201,8 +206,8 @@ export const useGhostStream = () => {
         resetIdleTimer();
     });
     
-    peer.on("close", () => { addLog("🔴 Connection Closed"); resetConnection(); });
-    peer.on("error", (err) => { addLog(`⚠️ Error: ${err.message}`); setStatus("idle"); });
+    peer.on("close", () => { addLog("NET  : P2P Connection Closed."); resetConnection(); });
+    peer.on("error", (err) => { addLog(`ERR  : WebRTC Error: ${err.message}`); setStatus("idle"); });
   };
 
   const callUser = (id: string) => {

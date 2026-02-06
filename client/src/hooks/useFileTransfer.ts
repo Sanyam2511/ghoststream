@@ -46,7 +46,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
           processNextInQueue();
       } else {
           isProcessing.current = false;
-          addLog("✅ All files sent successfully!");
+          addLog("OK   : Queue flushed. All files sent.");
           if (onTransferComplete) onTransferComplete();
       }
   };
@@ -67,10 +67,10 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     setTransferSpeed,
     onComplete: (isLast: boolean) => {
         if (isLast) {
-             addLog("🏁 Queue finished. Closing session soon...");
+             addLog("DONE : Queue finished. Closing session...");
              if (onTransferComplete) onTransferComplete();
         } else {
-             addLog("⏳ Waiting for next file in queue...");
+             addLog("WAIT : Awaiting next file in queue...");
         }
     }
   });
@@ -92,7 +92,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
           } catch(e) {}
       }
 
-      addLog(`🛑 Cancelled. Cleared ${count} files from queue.`);
+      addLog(`STOP : Cancelled. Cleared ${count} files.`);
   };
 
   const sendFiles = (files: File[]) => {
@@ -101,7 +101,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
       fileQueue.current.push(...files);
       setQueueCount(fileQueue.current.length);
       
-      addLog(`📚 Queued ${files.length} files. Total: ${fileQueue.current.length}`);
+      addLog(`QU   : Queued ${files.length} files. Total: ${fileQueue.current.length}`);
 
       if (!isProcessing.current) {
           processNextInQueue();
@@ -123,7 +123,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
              sender.sendFile(nextFile, currentIsLast);
           } catch (err) {
              isProcessing.current = false;
-             addLog("⚠️ Error starting transfer");
+             addLog("ERR  : Failed to initiate transfer.");
           }
       }, 1000);
   };
@@ -132,7 +132,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     const strData = parseData(data);
 
     if (strData.includes('"type":"transfer_cancelled"')) {
-        addLog("⚠️ Peer cancelled the transfer.");
+        addLog("WARN : Peer cancelled the transfer.");
         isProcessing.current = false;
         sender.stop();
         receiver.reset();
@@ -150,7 +150,7 @@ export const useFileTransfer = ({ peerRef, addLog, onTransferComplete, onRemoteC
     }
 
     if (strData.includes('"type":"transfer_rejected"')) {
-        addLog("⛔ Peer rejected the file. Skipping...");
+        addLog("WARN : Peer rejected file. Skipping...");
         handleSenderComplete(); 
         return;
     }

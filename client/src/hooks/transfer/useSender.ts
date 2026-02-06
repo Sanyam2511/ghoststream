@@ -27,7 +27,7 @@ export const useSender = ({ peerRef, addLog, transferMode, setProgress, setTrans
     
     currentFile.current = file;
     isStreaming.current = true;
-    addLog(`✨ Preparing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+    addLog(`EXEC : Preparing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
     const hash = await calculateFileHash(file);
 
@@ -41,7 +41,7 @@ export const useSender = ({ peerRef, addLog, transferMode, setProgress, setTrans
     };
 
     peerRef.current.send(JSON.stringify(header));
-    addLog(`📡 Header sent. Waiting for acceptance...`);
+    addLog(`NET  : Header sent. Awaiting ACK...`);
   };
 
   const startStreaming = async (offset = 0) => {
@@ -51,7 +51,7 @@ export const useSender = ({ peerRef, addLog, transferMode, setProgress, setTrans
     const chunkSize = 16 * 1024; 
     let offsetCursor = offset;
     
-    addLog(`🚀 Starting Stream for ${file.name}...`);
+    addLog(`INIT : Starting Stream for ${file.name}...`);
 
     const readNextChunk = () => {
       if (!isStreaming.current || !peerRef.current?.connected) return;

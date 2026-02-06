@@ -56,7 +56,7 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
 
   const handleIncomingHeader = (header: any) => {
     if (receivingFile.current) {
-        addLog("⚠️ Found stuck transfer. Overwriting with new file...");
+        addLog("WARN : Found stuck transfer. Overwriting with new file...");
         reset(); 
     }
     
@@ -65,12 +65,12 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     transferStartTime.current = performance.now();
 
     if (suspendedFile.current && suspendedFile.current.id === fileId) {
-      addLog(`🔄 Resuming from ${Math.round((suspendedFile.current.received / suspendedFile.current.size) * 100)}%`);
+      addLog(`INFO : Resuming from ${Math.round((suspendedFile.current.received / suspendedFile.current.size) * 100)}%`);
       resumeOffset = suspendedFile.current.received;
       receivingFile.current = suspendedFile.current;
       suspendedFile.current = null;
     } else {
-      addLog(`📥 Incoming: ${header.name}`);
+      addLog(`RECV : Incoming: ${header.name}`);
       receivingFile.current = { 
         name: header.name, 
         size: header.size, 
@@ -105,15 +105,15 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     
     let isSuccess = false;
 
-    addLog("🔍 Verifying Integrity...");
+    addLog("EXEC : Verifying integrity...");
     try {
         if (file.expectedHash && window.crypto && window.crypto.subtle) {
             const hash = await calculateFileHash(blob);
             if (hash !== file.expectedHash) {
-                addLog("❌ INTEGRITY FAILED!");
+                addLog("ERR  : INTEGRITY FAILED. Hash mismatch.");
                 alert("Hash Mismatch!");
             } else {
-                addLog("✅ Verified!");
+                addLog("OK   : Integrity verified.");
                 triggerDownload(blob, file.name);
                 isSuccess = true;
             }
@@ -121,7 +121,7 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
             triggerDownload(blob, file.name);
             isSuccess = true;
         }
-    } catch (e) { addLog("⚠️ Verification Error"); }
+    } catch (e) { addLog("ERR  : Verification process failed."); }
 
     const duration = Math.max((performance.now() - transferStartTime.current) / 1000, 0.1);
     const speed = (file.size / 1024 / 1024) / duration;
@@ -146,7 +146,7 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = name; a.click();
-    addLog("💾 Downloaded!");
+    addLog("DISK : File saved to downloads.");
   };
 
   const acceptRequest = () => {
@@ -168,12 +168,12 @@ export const useReceiver = ({ peerRef, addLog, setProgress, setTransferSpeed, on
         }));
     }
     setIncomingRequest(null);
-    addLog("⛔ You rejected the file.");
+    addLog("USER : Transfer rejected.");
   };
 
   const suspendTransfer = () => {
     if (receivingFile.current) {
-        addLog(`⚠️ Saving progress...`);
+        addLog(`SYS  : Suspending. Progress saved.`);
         suspendedFile.current = { ...receivingFile.current };
         receivingFile.current = null;
     }
