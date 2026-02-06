@@ -26,10 +26,8 @@ export const useGhostStream = () => {
   
   const searchParams = useSearchParams();
 
-  // --- CYBERPUNK LOGGING ---
   const addLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('en-GB', { hour12: false }); // 14:30:22
-    setLogs(prev => [`${time} | ${msg}`, ...prev.slice(0, 9)]);
+    setLogs(prev => [msg, ...prev.slice(0, 9)]);
   };
 
   const [transferMode, setTransferMode] = useState<TransferMode>('balanced');
