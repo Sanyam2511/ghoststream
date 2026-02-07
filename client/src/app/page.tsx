@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from 'react'; // <--- IMPORT SUSPENSE
+import { useEffect, useState, Suspense } from 'react';
 import { useGhostStream } from '../hooks/useGhostStream';
 import Header from '../components/Header';
 import ConnectionPanel from '../components/ConnectionPanel';
@@ -9,8 +9,9 @@ import LogTerminal from '../components/LogTerminal';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import ChatPanel from '../components/ChatPanel';
 import RequestModal from '../components/RequestModal';
-import { Timer, PlayCircle, AlertTriangle } from 'lucide-react';
+import {PlayCircle, AlertTriangle } from 'lucide-react';
 import ModeSelector from '../components/ModeSelector';
+import GridBackground from '../components/GridBackground';
 
 function DestructModal({ onCancel }: { onCancel: () => void }) {
   const [timeLeft, setTimeLeft] = useState(30);
@@ -87,7 +88,8 @@ function AppContent() {
   } = useGhostStream();
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-green-500/30">
+    <div className="min-h-screen text-white font-sans selection:bg-green-500/30">
+      <GridBackground />
       <Header 
         status={status} 
         transferSpeed={transferSpeed} 
@@ -95,53 +97,56 @@ function AppContent() {
        />
       {warning && <DestructModal onCancel={cancelSelfDestruct} />}
 
-      <div className="max-w-4xl mx-auto px-8 pt-32 pb-0">
-          <ModeSelector 
-            currentMode={transferMode} 
-            setMode={setTransferMode} 
-            disabled={status !== 'connected'}
-          />
-      </div>
-
-      <main className="max-w-4xl mx-auto p-8 flex flex-col gap-8">
-        <ConnectionPanel 
-          status={status} 
-          roomId={roomId} 
-          setRoomId={setRoomId} 
-          joinRoom={joinRoom} 
-          createSecureRoom={createSecureRoom}
-        />
-
-        {status === 'connected' && (
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2">
-              <FileTransferPanel 
-                  sendFiles={sendFiles}
-                  progress={progress} 
-                  transferSpeed={transferSpeed} 
-                  queueCount={queueCount}
-                  onCancel={cancelTransfer}
-              />
-            </div>
-
-            <div className="md:col-span-1">
-                <ChatPanel messages={messages} sendChat={sendChat} />
-            </div>
-          </div>
-        )}
-
-        <LogTerminal logs={logs} />
-        <AnalyticsDashboard />
+      <div className="relative z-10">
         
-        {incomingRequest && (
-            <RequestModal 
-                request={incomingRequest} 
-                latency={latency}
-                onAccept={acceptRequest}
-                onReject={rejectRequest}
+        <div className="max-w-4xl mx-auto px-8 pt-32 pb-0">
+            <ModeSelector 
+              currentMode={transferMode} 
+              setMode={setTransferMode} 
+              disabled={status !== 'connected'}
             />
-        )}
-      </main>
+        </div>
+
+        <main className="max-w-4xl mx-auto p-8 flex flex-col gap-8">
+          <ConnectionPanel 
+            status={status} 
+            roomId={roomId} 
+            setRoomId={setRoomId} 
+            joinRoom={joinRoom} 
+            createSecureRoom={createSecureRoom}
+          />
+
+          {status === 'connected' && (
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <FileTransferPanel 
+                    sendFiles={sendFiles}
+                    progress={progress} 
+                    transferSpeed={transferSpeed} 
+                    queueCount={queueCount}
+                    onCancel={cancelTransfer}
+                />
+              </div>
+
+              <div className="md:col-span-1">
+                  <ChatPanel messages={messages} sendChat={sendChat} />
+              </div>
+            </div>
+          )}
+
+          <LogTerminal logs={logs} />
+          <AnalyticsDashboard />
+          
+          {incomingRequest && (
+              <RequestModal 
+                  request={incomingRequest} 
+                  latency={latency}
+                  onAccept={acceptRequest}
+                  onReject={rejectRequest}
+              />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
